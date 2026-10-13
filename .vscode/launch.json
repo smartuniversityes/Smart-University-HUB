@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Dev Server & Open Browser",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "node node_modules/next/dist/bin/next dev -p 3000",
+      "cwd": "${workspaceFolder}",
+      "serverReadyAction": {
+        "pattern": "Ready in",
+        "action": "openExternally",
+        "uriFormat": "http://localhost:3000"
+      }
+    }
+  ]
+}

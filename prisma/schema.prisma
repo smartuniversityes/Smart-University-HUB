@@ -1,0 +1,123 @@
+// Smart University Ecosystem - database schema
+// Note: SQLite does not support Prisma enums, so role/status fields are strings
+// constrained by the union types in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  /// ADMIN | PROFESSOR | STUDENT
+  role         String   @default("STUDENT")
+  department   String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  materials Material[] @relation("ProfessorMaterials")
+  favorites Favorite[]
+  downloads Download[]
+
+  @@index([role])
+}
+
+model Subject {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  /// 1-8
+  semester   Int
+  section    String?
+  department String?
+  createdAt  DateTime @default(now())
+
+  materials Material[]
+
+  @@index([semester])
+}
+
+model Material {
+  id            String  @id @default(cuid())
+  title         String
+  description   String?
+  originalName  String
+  storedName    String
+  /// lowercase extension without the dot, e.g. "pptx"
+  extension     String
+  mimeType      String
+  sizeBytes     Int
+  downloadCount Int     @default(0)
+
+  /// NONE | PENDING | RUNNING | READY | FAILED
+  previewStatus String  @default("NONE")
+  previewPath   String?
+  previewEngine String?
+  previewError  String?
+
+  subjectId   String
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  professorId String
+  professor   User    @relation("ProfessorMaterials", fields: [professorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  favorites Favorite[]
+  downloads Download[]
+  jobs      PreviewJob[]
+
+  @@index([subjectId])
+  @@index([professorId])
+  @@index([createdAt])
+  @@index([previewStatus])
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  materialId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, materialId])
+  @@index([userId])
+}
+
+model Download {
+  id           String   @id @default(cuid())
+  materialId   String
+  userId       String?
+  material     Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  downloadedAt DateTime @default(now())
+
+  @@index([materialId])
+  @@index([userId])
+}
+
+/// Durable record of a PDF conversion request so work survives a server restart.
+model PreviewJob {
+  id         String   @id @default(cuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  /// PENDING | RUNNING | DONE | FAILED
+  status     String   @default("PENDING")
+  engine     String?
+  error      String?
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([materialId])
+}
