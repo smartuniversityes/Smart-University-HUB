@@ -1,13 +1,8 @@
 node_modules
 .next
-.git
-.env
-.env.*
-!env.example
-dev.db
-dev.db-journal
 uploads
-README.md
-*.md
+dev.db
+.env
+.git
 *.log
-.DS_Store
+tmp-upload-test.txt
