@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Smart University - Study Material Hub",
-    template: "%s | Smart University",
+    default: `${SITE_NAME} - ${SITE_TAGLINE}`,
+    template: `%s | ${SITE_NAME}`,
   },
   description:
     "A centralised platform where professors upload lecture material and students find, preview and download it in seconds.",

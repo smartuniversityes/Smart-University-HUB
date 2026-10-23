@@ -13,4 +13,14 @@ export async function register(): Promise<void> {
     // A failure here must not stop the server from booting.
     console.error("Failed to recover stale preview jobs", error);
   }
+
+  // The chatbot index is recovered the same way: anything a previous process
+  // left mid-run is re-queued, and real uploads that were never indexed get
+  // their first indexing pass.
+  const { recoverStaleIndexing } = await import("@/lib/index-queue");
+  try {
+    await recoverStaleIndexing();
+  } catch (error) {
+    console.error("Failed to recover chatbot indexing", error);
+  }
 }

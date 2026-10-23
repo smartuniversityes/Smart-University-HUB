@@ -1,12 +1,14 @@
-# Smart University Ecosystem
+# Smart Study EcoSystem
 
 A material hub for a university department. Professors upload lecture slides,
 notes and PDFs; students search the catalogue, preview documents in the browser,
-print, download, and save favourites.
+print, download, and save favourites — and ask a study chatbot questions about
+the uploaded material, with every answer citing the exact lecture and slide it
+came from.
 
 Built for a final year project, so it is deliberately small, readable and easy to
 demonstrate, while still covering the parts that matter: authentication, roles,
-file storage, document conversion and access control.
+file storage, document conversion, access control and retrieval-augmented AI.
 
 ## Features
 
@@ -26,6 +28,12 @@ file storage, document conversion and access control.
   subject, and delete material.
 - **Admin tools** — dashboard with usage statistics, user and role management,
   account activation, and subject management.
+- **Study chatbot (Ask AI)** — signed-in students ask questions in English,
+  Urdu or Roman Urdu and get answers generated strictly from the uploaded
+  material, with inline `[n]` references back to the exact file, slide and
+  quote. Full-page `/chat` with per-student conversation history, plus a
+  floating widget on every other page, and an "Ask AI" button per material
+  that scopes answers to that one file.
 - **Interface** — light and dark themes, responsive from phone to desktop, and
   accessible labelling and focus states throughout.
 
@@ -39,6 +47,7 @@ file storage, document conversion and access control.
 | Database | SQLite via Prisma 7 with the better-sqlite3 driver adapter |
 | Auth | Hand-rolled JWT session in an httpOnly cookie, bcrypt password hashing |
 | Conversion | LibreOffice headless, with a Windows Office COM fallback |
+| Chatbot / embeddings | Google Gemini (Generative Language REST API) |
 | Validation | Zod |
 
 SQLite is used because it makes the project trivial to run and demo on a single
@@ -70,8 +79,22 @@ DATABASE_URL="file:./dev.db"
 #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 AUTH_SECRET="replace-me-with-a-long-random-string"
 
-NEXT_PUBLIC_SITE_NAME="Smart University"
+NEXT_PUBLIC_SITE_NAME="Smart Study EcoSystem"
+
+# Google Gemini key for the study chatbot (embeddings + answers).
+# Get a free key at https://aistudio.google.com/apikey
+GEMINI_API_KEY="your-key-here"
+
+# Optional overrides; sensible defaults are built in. Note that retired models
+# such as gemini-2.5-flash are rejected on newer API keys, and the newest
+# aliases (gemini-flash-latest) are often at capacity — the default
+# gemini-3.5-flash responds in about two seconds on the free tier.
+GEMINI_CHAT_MODEL="gemini-3.5-flash"
+GEMINI_EMBED_MODEL="gemini-embedding-001"
 ```
+
+Without `GEMINI_API_KEY` everything else still works; the chatbot reports that
+it is not configured and indexing marks materials as failed with a clear reason.
 
 Then create the database and the demo data:
 
@@ -138,6 +161,53 @@ Job state lives in the database, so a server restart mid-conversion is
 recoverable. `src/instrumentation.ts` re-queues any job left `RUNNING` by a
 previous process when the server boots.
 
+## How the study chatbot works
+
+The chatbot is retrieval-augmented: Gemini never answers from its own
+knowledge, only from excerpts of the uploaded files, and it must cite them.
+
+1. **Text extraction.** When a material is uploaded (or the admin presses
+   *Rebuild AI chatbot index*), the file's text is extracted directly —
+   `.txt/.md/.csv/.log` read as-is, `.pdf` through `unpdf`, and
+   `.pptx/.docx/.xlsx` by unzipping the OOXML package with `jszip`. Legacy
+   `.ppt/.doc/.xls` fall back to their converted preview PDF. Seeded sample
+   rows with no file on disk are skipped.
+2. **Chunking.** The text is split into small passages, each stored as a
+   `DocumentChunk` with its material, slide/page label and subject.
+3. **Embedding.** Every chunk is embedded with `gemini-embedding-001`
+   (3072 dimensions) and stored as a compressed float blob in SQLite.
+   Indexing runs in a single in-process queue (mirroring the preview queue);
+   `src/instrumentation.ts` re-queues interrupted work on boot.
+4. **Retrieval.** On each question the student's text is embedded once, the
+   nearest chunks are found with a cosine similarity scan in code (no vector
+   extension needed), and the top matches become numbered excerpts in the
+   system prompt.
+5. **Answer.** `gemini-3.5-flash` streams the answer over server-sent
+   events; the route relays it as NDJSON events (`session`, `source`,
+   `delta`, `done`, `error`) to the browser, which renders tokens as they
+   arrive. Transient HTTP 503s from the free tier are retried with backoff.
+6. **References.** The excerpts shown under each answer are the *actual*
+   retrieved chunks — material title, subject, slide/page and a quote — so
+   the references cannot be hallucinated. Each links to the material page.
+7. **History.** Conversations are stored per student (`ChatSession` /
+   `ChatMessage`) and only the owner can read them; `/chat` requires sign-in.
+
+The admin dashboard shows index coverage (ready materials, searchable chunks,
+failures) and the rebuild button, which re-extracts and re-embeds everything.
+A failure is never silent: the material records the reason (missing file, no
+readable text, or a bad/absent Gemini key).
+
+### Trying it
+
+1. Sign in as `ali.raza@student.university.edu` / `Password123`.
+2. Open **Ask AI** in the header (or the floating button on any page) and ask
+   a question — e.g. *"What is a smart university ecosystem?"* or the Roman
+   Urdu suggestion *"Previous exam questions kya the?"*.
+3. On a material page, press **Ask AI** there to restrict answers to that one
+   file; the composer shows a scope chip that can be removed again.
+4. Stop a long answer mid-stream with the stop button — whatever was
+   generated is kept. Delete old conversations from the sidebar.
+
 ## Project layout
 
 ```
@@ -148,12 +218,15 @@ prisma/
 src/
   app/
     (auth)/              sign-in and registration
+    chat/                full-page study chatbot (protected)
     materials/           catalogue, detail, print view
     professor/           upload and management screens
-    admin/               dashboard, users, subjects
+    admin/               dashboard, users, subjects, index rebuild
     api/materials/       download, preview, conversion, text content
+    api/chat/            streaming chat endpoint (NDJSON)
   components/
     materials/           cards, filters, preview, upload, pagination
+    chat/                chat panel, message bubbles, citations, widget
     admin/               user and subject managers
     ui/                  shadcn/ui components
     auth/                sign-in and registration forms
@@ -165,8 +238,12 @@ src/
     preview-queue.ts     durable conversion queue
     materials.ts         catalogue queries and filters
     file-types.ts        allowed formats, limits, preview strategy
+    gemini.ts            Gemini REST client (embeddings + streamed chat)
+    extraction.ts        text extraction per file type
+    index-queue.ts       chunking, embedding, chatbot index queue
+    rag.ts               similarity search and prompt building
   proxy.ts               route protection
-  instrumentation.ts     startup recovery
+  instrumentation.ts     startup recovery (previews + chatbot index)
 uploads/                 runtime files, gitignored
 ```
 
@@ -199,6 +276,11 @@ These are deliberate choices rather than incidental ones:
   relative path, which blocks open-redirect attempts.
 - Browsing material is public, but downloads, text previews, favourites, and all
   upload or management routes require a session.
+- The Gemini API key lives only in `.env` and is read server-side; it never
+  reaches the browser. Chat routes require a signed-in session, and conversations
+  are queried by their owner's id, so one student cannot read another's history.
+  The system prompt tells the model to answer only from the retrieved excerpts,
+  and the citations shown are the real retrieved chunks rather than model output.
 
 ## Known limitations
 
@@ -213,3 +295,7 @@ These are deliberate choices rather than incidental ones:
   before a real deployment.
 - **No virus scanning.** Uploaded files are stored as-is. A production system
   should scan on upload.
+- **Chatbot runs on the Gemini free tier.** Occasional 503/429 responses are
+  retried with backoff, but heavy use will still hit rate limits. Similarity
+  search is a linear scan in SQLite, which is fine for thousands of chunks but
+  would want a real vector index at much larger scale.

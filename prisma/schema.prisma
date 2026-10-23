@@ -1,4 +1,4 @@
-// Smart University Ecosystem - database schema
+// Smart Study EcoSystem - database schema
 // Note: SQLite does not support Prisma enums, so role/status fields are strings
 // constrained by the union types in src/lib/constants.ts.
 
@@ -23,9 +23,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  materials Material[] @relation("ProfessorMaterials")
-  favorites Favorite[]
-  downloads Download[]
+  materials   Material[]    @relation("ProfessorMaterials")
+  favorites   Favorite[]
+  downloads   Download[]
+  chatSessions ChatSession[]
 
   @@index([role])
 }
@@ -63,6 +64,11 @@ model Material {
   previewEngine String?
   previewError  String?
 
+  /// Chatbot index state: NONE | PENDING | RUNNING | READY | FAILED
+  indexStatus String   @default("NONE")
+  indexError  String?
+  indexedAt   DateTime?
+
   subjectId   String
   subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   professorId String
@@ -74,11 +80,60 @@ model Material {
   favorites Favorite[]
   downloads Download[]
   jobs      PreviewJob[]
+  chunks    DocumentChunk[]
 
   @@index([subjectId])
   @@index([professorId])
   @@index([createdAt])
   @@index([previewStatus])
+  @@index([indexStatus])
+}
+
+/// One retrievable piece of a material's text, with its embedding. Chunks are
+/// what the chatbot searches when a student asks a question, so each one keeps
+/// enough context (page/slide label included when the extractor knows it) to
+/// stand on its own as a citation.
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  /// "Slide 4", "Page 12" ... when the extractor could tell, else null
+  pageLabel  String?
+  content    String
+  /// Float32 embedding vector, base64-encoded
+  embedding  Bytes
+  createdAt  DateTime @default(now())
+
+  @@unique([materialId, chunkIndex])
+  @@index([materialId])
+}
+
+/// A student's conversation with the study chatbot.
+model ChatSession {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /// "user" | "assistant"
+  role      String
+  content   String
+  /// JSON array of { materialId, title, subjectCode, pageLabel, quote }
+  citations String?
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
 }
 
 model Favorite {

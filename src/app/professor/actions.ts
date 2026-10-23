@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
+import { enqueueIndexing } from "@/lib/index-queue";
 import { saveOriginal, writePreview, deleteOriginal, deletePreview } from "@/lib/storage";
 import {
   MAX_UPLOAD_BYTES,
@@ -109,6 +110,13 @@ export async function uploadMaterial(
 
     revalidatePath("/materials");
     revalidatePath("/professor/materials");
+
+    // Start indexing for the chatbot in the background: extraction plus
+    // embedding takes seconds, and the student should not wait for it here.
+    await enqueueIndexing(material.id).catch((error) => {
+      console.error("Failed to queue indexing", error);
+    });
+
     redirect(`/professor/materials?uploaded=${material.id}`);
   } catch (error) {
     if (error instanceof Error && error.message.includes("NEXT_REDIRECT")) {

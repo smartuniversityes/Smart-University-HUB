@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 import { HeaderNav } from "@/components/header-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -15,17 +16,17 @@ export async function SiteHeader() {
         <Link
           href="/"
           className="group flex shrink-0 items-center gap-2.5"
-          aria-label="Smart University home"
+          aria-label={`${SITE_NAME} home`}
         >
           <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
             <GraduationCap className="size-5" aria-hidden="true" />
           </span>
           <span className="hidden flex-col leading-none sm:flex">
             <span className="text-[15px] font-semibold tracking-tight">
-              Smart University
+              {SITE_NAME}
             </span>
             <span className="text-[11px] text-muted-foreground">
-              Study Material Hub
+              {SITE_TAGLINE}
             </span>
           </span>
         </Link>

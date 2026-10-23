@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, Upload, LayoutDashboard, Users, FolderTree, Heart } from "lucide-react";
+import { Menu, Upload, LayoutDashboard, Users, FolderTree, Heart, Bot } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,10 @@ function navFor(user: SessionUser | null): NavItem[] {
   const items: NavItem[] = [{ href: "/materials", label: "Materials" }];
   if (!user) return items;
 
-  items.push({ href: "/favorites", label: "Favourites", icon: Heart });
+  items.push(
+    { href: "/chat", label: "Ask AI", icon: Bot },
+    { href: "/favorites", label: "Favourites", icon: Heart },
+  );
 
   if (user.role === "PROFESSOR" || user.role === "ADMIN") {
     items.push({ href: "/professor/materials", label: "My uploads", icon: Upload });

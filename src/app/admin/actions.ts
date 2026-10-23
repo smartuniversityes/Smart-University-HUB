@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import type { Role } from "@/lib/constants";
+import { reindexAllMaterials } from "@/lib/index-queue";
 import {
   createUser as createUserRecord,
   deleteUserById,
@@ -196,4 +197,17 @@ export async function deleteSubject(subjectId: string): Promise<void> {
   await deleteSubjectById(id);
   revalidatePath("/admin/subjects");
   revalidatePath("/materials");
+}
+
+/* -------------------------------------------------------------- chatbot */
+
+/**
+ * Rebuilds the study chatbot's index across every real file. Runs in the
+ * background queue, so this only queues the work and reports how much there is.
+ */
+export async function reindexChatbot(): Promise<number> {
+  await requireRole("ADMIN");
+  const queued = await reindexAllMaterials();
+  revalidatePath("/admin");
+  return queued;
 }

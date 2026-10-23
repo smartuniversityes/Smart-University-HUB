@@ -16,7 +16,7 @@ import { isRole } from "@/lib/constants";
  * are gated. Those are enforced in the route handlers, which re-check the
  * session against the database rather than trusting this signature alone.
  */
-const PROTECTED_PREFIXES = ["/favorites", "/professor", "/admin"] as const;
+const PROTECTED_PREFIXES = ["/favorites", "/professor", "/admin", "/chat"] as const;
 
 const AUTH_ROUTES = ["/login", "/register"] as const;
 
@@ -67,6 +67,7 @@ export const config = {
     "/favorites/:path*",
     "/professor/:path*",
     "/admin/:path*",
+    "/chat/:path*",
     "/login",
     "/register",
   ],

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   AlertTriangle,
+  Bot,
   FileText,
   FolderTree,
   Heart,
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { ReindexButton } from "@/components/admin/reindex-button";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
@@ -35,9 +37,13 @@ export default async function AdminDashboardPage() {
     totalBytes,
     failedPreviews,
     runningJobs,
+    indexedCount,
+    failedIndexes,
+    chunkCount,
     topMaterials,
     topProfessors,
     depth,
+    indexDepth,
   } = await getDashboardStats();
 
   return (
@@ -74,13 +80,50 @@ export default async function AdminDashboardPage() {
         />
       </div>
 
-      {failedPreviews > 0 || runningJobs > 0 || depth.queued > 0 ? (
+      <Card className="mt-4">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-normal text-muted-foreground">
+            Study chatbot index
+          </CardTitle>
+          <Bot className="size-4 text-muted-foreground" aria-hidden="true" />
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <span>
+            <span className="text-2xl font-semibold tabular-nums">{indexedCount}</span>
+            <span className="ml-2 text-muted-foreground">of {materialCount} material ready</span>
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {chunkCount} searchable chunks
+          </span>
+          {failedIndexes > 0 ? (
+            <span className="inline-flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-4" aria-hidden="true" />
+              {failedIndexes} could not be indexed (stored file missing, no readable text, or the
+              Gemini key is missing).
+            </span>
+          ) : (
+            <span className="text-muted-foreground">
+              Sample records without an uploaded file are skipped by design.
+            </span>
+          )}
+        </CardContent>
+      </Card>
+
+      {failedPreviews > 0 || runningJobs > 0 || depth.queued > 0 || indexDepth.queued > 0 || indexDepth.running > 0 ? (
         <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm">
           {runningJobs > 0 || depth.queued > 0 ? (
             <>
               <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
               <span>
                 {depth.running} converting, {depth.queued} queued.
+              </span>
+            </>
+          ) : null}
+          {indexDepth.running > 0 || indexDepth.queued > 0 ? (
+            <>
+              <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+              <span>
+                Chatbot indexing: {indexDepth.running} running, {indexDepth.queued} queued.
               </span>
             </>
           ) : null}
@@ -181,6 +224,7 @@ export default async function AdminDashboardPage() {
                 Review all material
               </Link>
             </Button>
+            <ReindexButton />
           </CardContent>
         </Card>
 

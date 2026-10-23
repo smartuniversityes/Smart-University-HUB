@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GraduationCap } from "lucide-react";
+import { SITE_NAME } from "@/lib/site";
 
 export function SiteFooter() {
   return (
@@ -8,7 +9,7 @@ export function SiteFooter() {
         <div className="flex items-center gap-2">
           <GraduationCap className="size-4" aria-hidden="true" />
           <span>
-            Smart University — Final Year Project. A centralised study material
+            {SITE_NAME} — Final Year Project. A centralised study material
             hub for students and faculty.
           </span>
         </div>

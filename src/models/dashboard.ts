@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { queueDepth } from "@/lib/preview-queue";
+import { indexQueueDepth } from "@/lib/index-queue";
 
 /** Everything the admin dashboard renders, in one model call. */
 export async function getDashboardStats() {
@@ -15,6 +16,9 @@ export async function getDashboardStats() {
     storageBytes,
     failedPreviews,
     runningJobs,
+    indexedCount,
+    failedIndexes,
+    chunkCount,
     topMaterials,
     topProfessors,
   ] = await Promise.all([
@@ -27,6 +31,9 @@ export async function getDashboardStats() {
     prisma.material.aggregate({ _sum: { sizeBytes: true } }),
     prisma.material.count({ where: { previewStatus: "FAILED" } }),
     prisma.previewJob.count({ where: { status: { in: ["PENDING", "RUNNING"] } } }),
+    prisma.material.count({ where: { indexStatus: "READY" } }),
+    prisma.material.count({ where: { indexStatus: "FAILED" } }),
+    prisma.documentChunk.count(),
     prisma.material.findMany({
       orderBy: { downloadCount: "desc" },
       take: 5,
@@ -50,8 +57,12 @@ export async function getDashboardStats() {
     totalBytes: storageBytes._sum.sizeBytes ?? 0,
     failedPreviews,
     runningJobs,
+    indexedCount,
+    failedIndexes,
+    chunkCount,
     topMaterials,
     topProfessors,
     depth: queueDepth(),
+    indexDepth: indexQueueDepth(),
   };
 }

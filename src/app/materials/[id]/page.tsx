@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, Eye, FileText, Pencil, Trash2, User } from "lucide-react";
+import { Download, Eye, FileText, Pencil, Sparkles, Trash2, User } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { isPreviewStatus } from "@/lib/constants";
 import { getFileKind } from "@/lib/file-types";
@@ -92,6 +92,14 @@ export default async function MaterialDetailPage({
             </Button>
           ) : null}
           {canManage ? <DeleteMaterialButton materialId={material.id} /> : null}
+          {user && !sample ? (
+            <Button asChild variant="secondary" size="sm">
+              <Link href={`/chat?material=${material.id}`}>
+                <Sparkles className="size-4" aria-hidden="true" />
+                Ask AI
+              </Link>
+            </Button>
+          ) : null}
           {user ? (
             <Button asChild>
               <a href={`/api/materials/${material.id}/download`}>
