@@ -192,6 +192,7 @@ export async function* streamChat(options: StreamChatOptions): AsyncGenerator<st
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let finishReason: string | undefined;
 
   /** Collects the answer texts carried by one complete SSE event. */
   const textsOf = (event: string): string[] => {
@@ -202,8 +203,14 @@ export async function* streamChat(options: StreamChatOptions): AsyncGenerator<st
       if (!payload || payload === "[DONE]") continue;
       try {
         const parsed = JSON.parse(payload) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+            finishReason?: string;
+          }>;
         };
+        if (parsed.candidates?.[0]?.finishReason) {
+          finishReason = parsed.candidates[0].finishReason;
+        }
         const parts = parsed.candidates?.[0]?.content?.parts ?? [];
         for (const part of parts) {
           if (typeof part.text === "string" && part.text.length > 0) {
@@ -234,5 +241,11 @@ export async function* streamChat(options: StreamChatOptions): AsyncGenerator<st
     for (const text of textsOf(buffer)) yield text;
   } finally {
     reader.releaseLock();
+  }
+
+  if (finishReason && finishReason !== "STOP") {
+    throw new GeminiError(
+      `The answer was cut short by the model (${finishReason.toLowerCase()}). Please try again or rephrase your question.`,
+    );
   }
 }

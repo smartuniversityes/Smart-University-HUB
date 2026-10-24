@@ -17,8 +17,14 @@ import { SITE_NAME } from "@/lib/site";
 
 /** How many excerpts are handed to the model as context. */
 const TOP_K = 6;
+/** Scoped chat sees one document, so give the model more of it (e.g. a full slide deck). */
+const SCOPED_TOP_K = 12;
 /** Caps excerpts per material so one long document cannot crowd out the rest. */
 const PER_MATERIAL_CAP = 3;
+/** When scoped to a single material, allow more excerpts from it to avoid missing content. */
+const SCOPED_PER_MATERIAL_CAP = 12;
+/** Drop very weak matches to avoid showing unrelated sources. */
+const MIN_SCORE = 0.15;
 
 export type RetrievedChunk = {
   id: string;
@@ -118,6 +124,7 @@ export async function retrieve(query: string, materialId?: string): Promise<Retr
   let rows = await loadRows();
   if (rows.length === 0) return [];
 
+  const scoped = Boolean(materialId);
   if (materialId) {
     rows = rows.filter((row) => row.materialId === materialId);
     if (rows.length === 0) return [];
@@ -133,11 +140,14 @@ export async function retrieve(query: string, materialId?: string): Promise<Retr
 
   const seen = new Map<string, number>();
   const picked: RetrievedChunk[] = [];
+  const perMaterialCap = scoped ? SCOPED_PER_MATERIAL_CAP : PER_MATERIAL_CAP;
+  const topK = scoped ? SCOPED_TOP_K : TOP_K;
 
   for (const { row, score } of scored) {
-    if (picked.length >= TOP_K) break;
+    if (picked.length >= topK) break;
+    if (score < MIN_SCORE) continue;
     const perMaterial = seen.get(row.materialId) ?? 0;
-    if (perMaterial >= PER_MATERIAL_CAP) continue;
+    if (perMaterial >= perMaterialCap) continue;
     seen.set(row.materialId, perMaterial + 1);
 
     picked.push({

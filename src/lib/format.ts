@@ -31,9 +31,10 @@ export function formatDateTime(date: Date | string): string {
   }).format(new Date(date));
 }
 
-export function relativeTime(date: Date | string): string {
+export function relativeTime(date: Date | string, now: number = Date.now()): string {
   const then = new Date(date).getTime();
-  const seconds = Math.round((Date.now() - then) / 1000);
+  // Clamp to zero so clock skew or a stale `now` never renders "in 5 seconds".
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
   const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
   const steps: Array<[Intl.RelativeTimeFormatUnit, number]> = [

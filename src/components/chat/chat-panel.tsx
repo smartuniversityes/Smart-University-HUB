@@ -61,6 +61,12 @@ export function ChatPanel({
   const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [scope, setScope] = useState(material);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -340,7 +346,7 @@ export function ChatPanel({
                     >
                       <span className="block truncate">{session.title}</span>
                       <span className="mt-0.5 block text-[11px] opacity-70">
-                        {relativeTime(session.updatedAt)}
+                        {relativeTime(session.updatedAt, now)}
                       </span>
                     </button>
                     <button

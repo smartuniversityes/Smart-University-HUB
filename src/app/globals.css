@@ -139,3 +139,15 @@
     background: #fff !important;
   }
 }
+
+/* Hide Next.js dev tools indicator in local development if visible */
+nextjs-portal {
+  display: none !important;
+}
+[data-nextjs-toast] {
+  display: none !important;
+}
+#__next-build-indicator,
+[class*="build-indicator"] {
+  display: none !important;
+}

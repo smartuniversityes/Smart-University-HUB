@@ -13,6 +13,13 @@ export async function GET(
 
   const { id } = await ctx.params;
   const messages = await listChatMessages(user.id, id);
+  if (messages.length === 0) {
+    const { findOwnedSession } = await import("@/models/chat");
+    const session = await findOwnedSession(user.id, id);
+    if (!session) {
+      return Response.json({ error: "Conversation not found." }, { status: 404 });
+    }
+  }
   return Response.json({ messages });
 }
 
