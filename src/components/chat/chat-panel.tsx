@@ -14,12 +14,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDateTime, relativeTime } from "@/lib/format";
+import { normalizeCitations } from "@/lib/citations";
 import { cn } from "@/lib/utils";
 import type { ChatTurn, SessionSummary, SourceEvent, StreamEvent } from "@/lib/chat-types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CitationList } from "@/components/chat/citations";
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
 
 /**
  * The chat interface itself: conversation history on the left, the streamed
@@ -46,13 +48,16 @@ export function ChatPanel({
   material = null,
   className,
   variant = "page",
+  onClose,
 }: {
   initialSessions?: SessionSummary[];
   /** Locks answers to this one file (the "Ask AI" button on material pages). */
   material?: { id: string; title: string; subjectCode: string } | null;
   className?: string;
-  /** "page" shows the history sidebar; "widget" fits inside the floating sheet. */
+  /** "page" shows the history sidebar; "widget" fits inside the floating panel. */
   variant?: "page" | "widget";
+  /** Called by the widget's close button; the page variant never shows it. */
+  onClose?: () => void;
 }) {
   const [sessions, setSessions] = useState<SessionSummary[]>(initialSessions ?? []);
   const [conversation, setConversation] = useState<Conversation>(EMPTY);
@@ -61,12 +66,6 @@ export function ChatPanel({
   const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [scope, setScope] = useState(material);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -182,6 +181,15 @@ export function ChatPanel({
     const commit = () => {
       if (committed || answer.trim().length === 0) return;
       committed = true;
+      const retrieved = sources.map((source) => ({
+        materialId: source.materialId,
+        title: source.title,
+        subjectCode: source.subjectCode,
+        pageLabel: source.pageLabel,
+        quote: source.quote,
+      }));
+      // Keep only the excerpts the answer actually cites, renumbered to match.
+      const normalized = normalizeCitations(answer.trim(), retrieved);
       setConversation((prev) => ({
         sessionId: announcedSession?.id ?? prev.sessionId,
         turns: [
@@ -189,17 +197,8 @@ export function ChatPanel({
           {
             id: `answer-${Date.now()}`,
             role: "assistant",
-            content: answer.trim(),
-            citations:
-              sources.length > 0
-                ? sources.map((source) => ({
-                    materialId: source.materialId,
-                    title: source.title,
-                    subjectCode: source.subjectCode,
-                    pageLabel: source.pageLabel,
-                    quote: source.quote,
-                  }))
-                : null,
+            content: normalized.text,
+            citations: normalized.citations,
             createdAt: new Date().toISOString(),
           },
         ],
@@ -345,8 +344,11 @@ export function ChatPanel({
                       title={`${session.title} — ${formatDateTime(session.updatedAt)}`}
                     >
                       <span className="block truncate">{session.title}</span>
-                      <span className="mt-0.5 block text-[11px] opacity-70">
-                        {relativeTime(session.updatedAt, now)}
+                      <span
+                        className="mt-0.5 block text-[11px] opacity-70"
+                        suppressHydrationWarning
+                      >
+                        {relativeTime(session.updatedAt)}
                       </span>
                     </button>
                     <button
@@ -368,15 +370,29 @@ export function ChatPanel({
       {/* --------------------------------------------------- messages */}
       <section className="flex min-w-0 flex-1 flex-col">
         {variant === "widget" ? (
-          <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <Bot className="size-4 text-primary" aria-hidden="true" />
-              Study assistant
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <Bot className="size-4 shrink-0 text-primary" aria-hidden="true" />
+              <span className="truncate">Study assistant</span>
             </span>
-            <Button type="button" size="sm" variant="ghost" onClick={startNewChat}>
-              <MessageSquarePlus className="size-4" aria-hidden="true" />
-              New chat
-            </Button>
+            <span className="flex shrink-0 items-center gap-0.5">
+              <Button type="button" size="sm" variant="ghost" onClick={startNewChat}>
+                <MessageSquarePlus className="size-4" aria-hidden="true" />
+                New chat
+              </Button>
+              {onClose ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={onClose}
+                  aria-label="Close assistant"
+                  className="size-8"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </Button>
+              ) : null}
+            </span>
           </div>
         ) : null}
 
@@ -470,6 +486,9 @@ export function ChatPanel({
 
 function Message({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === "user";
+  // Stored answers may predate source trimming, so normalise on render too.
+  const normalized = isUser ? null : normalizeCitations(turn.content, turn.citations);
+
   return (
     <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
       <span
@@ -484,16 +503,16 @@ function Message({ turn }: { turn: ChatTurn }) {
       <div className={cn("min-w-0 max-w-[85%]", isUser && "text-right")}>
         <div
           className={cn(
-            "inline-block whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-left text-sm leading-relaxed",
+            "inline-block max-w-full break-words rounded-2xl px-4 py-2.5 text-left text-sm leading-relaxed",
             isUser
-              ? "bg-primary text-primary-foreground"
+              ? "whitespace-pre-wrap bg-primary text-primary-foreground"
               : "border border-border/60 bg-muted/40",
           )}
         >
-          {turn.content}
+          {isUser ? turn.content : <ChatMarkdown content={normalized!.text} />}
         </div>
-        {!isUser && turn.citations && turn.citations.length > 0 ? (
-          <CitationList citations={turn.citations} />
+        {!isUser && normalized?.citations && normalized.citations.length > 0 ? (
+          <CitationList citations={normalized.citations} />
         ) : null}
       </div>
     </div>
@@ -517,8 +536,8 @@ function PendingMessage({
       </span>
       <div className="min-w-0 max-w-[85%]">
         {pending.text.length > 0 ? (
-          <div className="inline-block whitespace-pre-wrap break-words rounded-2xl border border-border/60 bg-muted/40 px-4 py-2.5 text-sm leading-relaxed">
-            {pending.text}
+          <div className="inline-block max-w-full break-words rounded-2xl border border-border/60 bg-muted/40 px-4 py-2.5 text-sm leading-relaxed">
+            <ChatMarkdown content={pending.text} />
             {sending ? (
               <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" />
             ) : null}
@@ -534,18 +553,6 @@ function PendingMessage({
           <p className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {pending.error}
           </p>
-        ) : null}
-
-        {pending.sources.length > 0 ? (
-          <CitationList
-            citations={pending.sources.map((source) => ({
-              materialId: source.materialId,
-              title: source.title,
-              subjectCode: source.subjectCode,
-              pageLabel: source.pageLabel,
-              quote: source.quote,
-            }))}
-          />
         ) : null}
       </div>
     </div>

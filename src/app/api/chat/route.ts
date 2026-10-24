@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getRequestUser } from "@/lib/auth";
+import { normalizeCitations } from "@/lib/citations";
 import { GeminiError, geminiConfigured, streamChat, type ChatTurn as GeminiTurn } from "@/lib/gemini";
 import { buildSystemPrompt, hasAnyIndexedChunks, retrieve } from "@/lib/rag";
 import {
@@ -178,7 +179,14 @@ export async function POST(request: Request) {
 
       try {
         if (answer.trim().length > 0) {
-          const saved = await saveAssistantMessage(ownedSessionId, answer.trim(), citations);
+          // Only the excerpts the answer actually cites are kept, renumbered to
+          // match the inline markers, so history shows the same short list.
+          const normalized = normalizeCitations(answer.trim(), citations);
+          const saved = await saveAssistantMessage(
+            ownedSessionId,
+            normalized.text,
+            normalized.citations ?? [],
+          );
           send({ type: "done", messageId: saved.id });
         } else if (!aborted.signal.aborted) {
           send({ type: "error", message: "The assistant returned an empty answer. Try again." });

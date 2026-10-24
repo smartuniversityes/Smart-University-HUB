@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { ChevronRight, FileText } from "lucide-react";
 import type { Citation } from "@/lib/chat-types";
 import { cn } from "@/lib/utils";
 
 /**
- * The "Sources" block under an assistant answer. Every card links back to the
- * material page and shows the exact quote the answer was built from, so a
- * student can verify the answer instead of trusting it blindly.
+ * The "Sources" block under an assistant answer. It stays collapsed until the
+ * student asks for it, so a long answer is not pushed down by a wall of quotes.
+ * Each card links back to the material page and shows the exact quote the
+ * answer was built from.
  */
 export function CitationList({
   citations,
@@ -20,13 +21,17 @@ export function CitationList({
   if (citations.length === 0) return null;
 
   return (
-    <div className={cn("mt-3", className)}>
-      <p className="text-xs font-medium text-muted-foreground">
-        Sources {citations.length > 0 ? `(${citations.length})` : ""}
-      </p>
-      <ul className="mt-1.5 space-y-1.5">
+    <details className={cn("group mt-2.5", className)}>
+      <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="size-3.5 transition-transform group-open:rotate-90"
+          aria-hidden="true"
+        />
+        Sources ({citations.length})
+      </summary>
+      <ul className="mt-2 space-y-1.5">
         {citations.map((citation, index) => (
-          <li key={`${citation.materialId}-${index}`}>
+          <li key={`${citation.materialId}-${citation.pageLabel ?? ""}-${index}`}>
             <Link
               href={`/materials/${citation.materialId}`}
               className="group flex gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/50"
@@ -45,7 +50,7 @@ export function CitationList({
                     {citation.pageLabel ? ` · ${citation.pageLabel}` : ""}
                   </span>
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                <span className="mt-0.5 block text-xs text-muted-foreground">
                   “{citation.quote}”
                 </span>
               </span>
@@ -53,6 +58,6 @@ export function CitationList({
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   );
 }
